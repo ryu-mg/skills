@@ -13,7 +13,7 @@ skills/
         └── skills/
             ├── las-status/        # LAS 근무 상태 변경 (출근/복귀/자리비움/식사/퇴근)
             │   └── SKILL.md
-                ├── schedule-meeting/  # 회의 일정 잡기 (name: calendar-meeting)
+            ├── calendar-meeting/  # 회의 일정 잡기
             │   └── SKILL.md
             ├── server-claim-deploy/      # Laftel IDP 환경 점유 + 배포
             │   └── SKILL.md
@@ -35,7 +35,7 @@ git clone git@github.com-myunggi:ryu-mg/skills.git ~/laftel/skills
 mkdir -p ~/.claude/skills
 SRC=~/laftel/skills/laftel/.claude/skills
 ln -s "$SRC/las-status"             ~/.claude/skills/las-status
-ln -s "$SRC/schedule-meeting"       ~/.claude/skills/schedule-meeting
+ln -s "$SRC/calendar-meeting"       ~/.claude/skills/calendar-meeting
 ln -s "$SRC/server-claim-deploy"    ~/.claude/skills/server-claim-deploy
 ln -s "$SRC/server-occupancy-status" ~/.claude/skills/server-occupancy-status
 ```
