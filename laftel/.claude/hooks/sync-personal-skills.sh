@@ -51,21 +51,14 @@ link_glob() {
 link_glob "$SKILLS_SRC/*" "$HOME/.claude/skills"
 link_glob "$HOOKS_SRC/*" "$HOME/.claude/hooks"
 
-# 2. 실행 기록 로그 (매 실행마다 한 줄, 실패해도 남김)
-LOG_DIR="$HOME/.claude/logs"
-mkdir -p "$LOG_DIR"
-timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+# 2. 실행 기록 로그 (공통 훅 로거)
 created_detail=""
 if [ ${#created[@]} -gt 0 ]; then
   created_names=$(printf '%s ' "${created[@]##*/}")
   created_detail=" (${created_names% })"
 fi
-LOG_FILE="$LOG_DIR/sync-personal-skills.log"
-echo "$timestamp  pull=$pull_status  created=${#created[@]}${created_detail}  warnings=${#warnings[@]}" >> "$LOG_FILE"
-
-# 오늘 날짜 로그만 보존 (이전 날짜 줄 제거)
-today="${timestamp%% *}"
-grep "^$today " "$LOG_FILE" > "$LOG_FILE.tmp" 2>/dev/null && mv "$LOG_FILE.tmp" "$LOG_FILE"
+bash "$HOME/.claude/hooks/hook-log.sh" sync-personal-skills \
+  "pull=$pull_status created=${#created[@]}${created_detail} warnings=${#warnings[@]}"
 
 # 3. 변경/경고가 있을 때만 출력 (없으면 침묵)
 if [ ${#created[@]} -gt 0 ] || [ ${#warnings[@]} -gt 0 ]; then
