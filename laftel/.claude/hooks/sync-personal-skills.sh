@@ -15,8 +15,12 @@ SKILLS_SRC="$REPO/laftel/.claude/skills"
 HOOKS_SRC="$REPO/laftel/.claude/hooks"
 
 # 1. 원격 최신 형상 반영 (네트워크 hang 방지, 실패 무시)
-GIT_SSH_COMMAND="ssh -o ConnectTimeout=5 -o BatchMode=yes" \
-  git -C "$REPO" pull --quiet --ff-only 2>/dev/null
+if GIT_SSH_COMMAND="ssh -o ConnectTimeout=5 -o BatchMode=yes" \
+     git -C "$REPO" pull --quiet --ff-only 2>/dev/null; then
+  pull_status="ok"
+else
+  pull_status="fail"
+fi
 
 created=()
 warnings=()
@@ -47,7 +51,23 @@ link_glob() {
 link_glob "$SKILLS_SRC/*" "$HOME/.claude/skills"
 link_glob "$HOOKS_SRC/*" "$HOME/.claude/hooks"
 
-# 2. 변경/경고가 있을 때만 출력 (없으면 침묵)
+# 2. 실행 기록 로그 (매 실행마다 한 줄, 실패해도 남김)
+LOG_DIR="$HOME/.claude/logs"
+mkdir -p "$LOG_DIR"
+timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+created_detail=""
+if [ ${#created[@]} -gt 0 ]; then
+  created_names=$(printf '%s ' "${created[@]##*/}")
+  created_detail=" (${created_names% })"
+fi
+LOG_FILE="$LOG_DIR/sync-personal-skills.log"
+echo "$timestamp  pull=$pull_status  created=${#created[@]}${created_detail}  warnings=${#warnings[@]}" >> "$LOG_FILE"
+
+# 오늘 날짜 로그만 보존 (이전 날짜 줄 제거)
+today="${timestamp%% *}"
+grep "^$today " "$LOG_FILE" > "$LOG_FILE.tmp" 2>/dev/null && mv "$LOG_FILE.tmp" "$LOG_FILE"
+
+# 3. 변경/경고가 있을 때만 출력 (없으면 침묵)
 if [ ${#created[@]} -gt 0 ] || [ ${#warnings[@]} -gt 0 ]; then
   echo "[개인 스킬 동기화]"
   for created_path in "${created[@]}"; do
