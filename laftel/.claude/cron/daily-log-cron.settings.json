@@ -1,0 +1,36 @@
+{
+  "advisorModel": "opus",
+  "permissions": {
+    "defaultMode": "default",
+    "allow": [
+      "mcp__claude_ai_Atlassian__atlassianUserInfo",
+      "mcp__claude_ai_Atlassian__getAccessibleAtlassianResources",
+      "mcp__claude_ai_Atlassian__searchJiraIssuesUsingJql",
+      "mcp__plugin_slack_slack__slack_search_public_and_private",
+      "mcp__plugin_slack_slack__slack_read_thread",
+      "Read",
+      "Glob",
+      "Grep",
+      "TodoWrite",
+      "Task",
+      "Write(~/ryu-mg/wiki/**)",
+      "Write(//Users/bao/ryu-mg/wiki/**)",
+      "Edit(~/ryu-mg/wiki/**)",
+      "Edit(//Users/bao/ryu-mg/wiki/**)",
+      "Bash(cd:*)",
+      "Bash(git:*)",
+      "Bash(date:*)",
+      "Bash(mkdir:*)",
+      "Bash(ls:*)",
+      "Bash(cat:*)",
+      "Bash(grep:*)",
+      "Bash(sed:*)",
+      "Bash(tr:*)",
+      "Bash(sort:*)",
+      "Bash(uniq:*)",
+      "Bash(head:*)",
+      "Bash(tail:*)",
+      "Bash(python3:*)"
+    ]
+  }
+}
