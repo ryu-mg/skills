@@ -88,7 +88,7 @@ gh pr view <num> --json comments \
 아래 포맷을 그대로 따른다:
 
 ```
-*[ :white_check_mark: PR #{번호} 리뷰 준비 완료 ]*
+*:white_check_mark: PR #{번호} 리뷰 준비 완료*
 
 [{KEY}-{번호}] {PR 제목}
 <{pr_url}|{pr_url 에서 github.com/... 부분}>
@@ -101,16 +101,16 @@ gh pr view <num> --json comments \
 *CI*
 - {통과/실패/진행 중} / Plan: {plan 한 줄, 있으면}
 
-<@UCPBMQP5W> 리뷰 요청 🙏
+<@UCPBMQP5W> 리뷰 부탁드립니다 :pray::skin-tone-2:
 ```
 
 규칙:
-- **헤더**: `*[ :white_check_mark: PR #{번호} 리뷰 준비 완료 ]*` — 볼드, ✅ 렌더.
+- **헤더**: `*:white_check_mark: PR #{번호} 리뷰 준비 완료*` — 볼드(`*`)만, 대괄호 `[ ]` 없음, 기울임 없음. ✅ 렌더.
 - **제목 줄**: `[{KEY}-{번호}] {PR 제목}`. `{KEY}-{번호}` 는 PR 제목/브랜치에서 추출(LAFTEL/STORE/GLOBAL, 기본 LAFTEL).
 - **GitHub 링크 줄**: 슬랙 링크 문법 `<{pr_url}|github.com/laftel-team/laftel-terraform/pull/{번호}>`. (Jira 링크는 넣지 않는다.)
 - **`*내용*`**: PR 의 핵심 변경을 불릿 2~5개로. PR 본문 `## 변경` 섹션이나 diff 에서 뽑는다. 코드 식별자는 `백틱`.
 - **`*CI*`**: CI 상태 + plan 한 줄. plan 못 구하면 `/ Plan: ...` 생략하고 상태만.
-- **마지막 줄**: `<@UCPBMQP5W> 리뷰 요청 🙏` 항상 포함. terraform GitOps라 **머지 = apply** 이므로 리뷰가 곧 배포 게이트다.
+- **마지막 줄**: `<@UCPBMQP5W> 리뷰 부탁드립니다 :pray::skin-tone-2:` 항상 포함. terraform GitOps라 **머지 = apply** 이므로 리뷰가 곧 배포 게이트다.
 
 ### 4. 전송 전 컨펌 (필수)
 
@@ -131,7 +131,7 @@ gh pr view <num> --json comments \
 
 전송 메시지:
 ```
-*[ :white_check_mark: PR #520 리뷰 준비 완료 ]*
+*:white_check_mark: PR #520 리뷰 준비 완료*
 
 [LAFTEL-7182] CI role ecs:RunTask 추가 (migration run-task)
 <https://github.com/laftel-team/laftel-terraform/pull/520|github.com/laftel-team/laftel-terraform/pull/520>
@@ -143,5 +143,5 @@ gh pr view <num> --json comments \
 *CI*
 - 통과 / Plan: 0 add, 1 change, 0 destroy (IAM in-place)
 
-<@UCPBMQP5W> 리뷰 요청 🙏
+<@UCPBMQP5W> 리뷰 부탁드립니다 :pray::skin-tone-2:
 ```
