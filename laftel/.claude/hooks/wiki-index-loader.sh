@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# SessionStart 훅: LLM 위키(ryu.mg/wiki) index.md 를 컨텍스트에 주입한다.
-# Obsidian 앱 불필요 — iCloud 볼트 파일을 직접 읽는다. 실패 시 조용히 exit 0.
+# SessionStart 훅: LLM 위키(ryu-mg/wiki) index.md 를 컨텍스트에 주입한다.
+# git 단독 관리(iCloud 밖, ~/ryu-mg/wiki). 실패 시 조용히 exit 0.
 # 출력은 hookSpecificOutput.additionalContext (정식 SessionStart 컨텍스트 주입).
 
-INDEX="$HOME/Library/Mobile Documents/iCloud~md~obsidian/Documents/ryu.mg/wiki/index.md"
+INDEX="$HOME/ryu-mg/wiki/index.md"
 
 log() { bash "$HOME/.claude/hooks/hook-log.sh" wiki-index-loader "$1"; }
 
