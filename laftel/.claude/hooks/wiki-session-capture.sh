@@ -1,29 +1,64 @@
 #!/usr/bin/env bash
-# SessionEnd 훅: 종료/clear 시 세션 transcript 를 헤드리스 claude(haiku)로
-# "위키감" 판단 → 후보면 인박스(notes/_inbox.md)에 append 한다.
-# 위키 본구조엔 쓰지 않고 commit 도 안 한다(승인 원칙 유지). 정식 파일링은 /wiki-capture.
+# SessionEnd hook: enqueue ended Claude Code transcripts for LLM-wiki capture.
+# A single background worker processes the queue, filters low-signal sessions, and
+# asks headless claude(haiku) only when the transcript looks worth classifying.
 #
-# 안전 원칙:
-# - 비대화형·fire-and-forget. 백그라운드 분리 + 즉시 exit 0 으로 종료 지연 방지.
-# - claude 없거나 transcript 없거나 위키 repo 없으면 조용히 skip.
-# - 실패해도 세션/위키에 영향 없음.
+# Safety:
+# - SessionEnd path is cheap: enqueue + best-effort worker start + exit 0.
+# - mkdir-based lock keeps at most one worker running.
+# - Duplicate transcript paths are skipped after the first completed processing.
+# - Failures never block Claude sessions.
 
 INBOX="$HOME/ryu-mg/wiki/notes/_inbox.md"
+QUEUE_DIR="$HOME/.claude/wiki-session-capture-queue"
+DONE_DIR="$QUEUE_DIR/done"
+LOCK_DIR="$QUEUE_DIR/.worker.lock"
 LOG_NAME=wiki-session-capture
+MAX_QUEUE_ITEMS=200
 
-input=$(cat)
-tp=$(printf '%s' "$input" | jq -r '.transcript_path // empty' 2>/dev/null)
-reason=$(printf '%s' "$input" | jq -r '.reason // "other"' 2>/dev/null)
+log() {
+  bash "$HOME/.claude/hooks/hook-log.sh" "$LOG_NAME" "$1"
+}
 
-CLAUDE=$(command -v claude)
-if [ -z "$CLAUDE" ] || [ ! -r "$tp" ] || [ ! -d "$HOME/ryu-mg/wiki/.git" ]; then
-  bash "$HOME/.claude/hooks/hook-log.sh" "$LOG_NAME" "skip (claude=${CLAUDE:+y} tp=${tp:+y})"
-  exit 0
-fi
+hash_key() {
+  printf '%s' "$1" | shasum | awk '{print $1}'
+}
 
-# 백그라운드로 분리 — 종료 지연 방지. claude 판단은 수 초~수십 초 걸릴 수 있음.
-nohup bash -c '
-  tp="$1"; inbox="$2"; reason="$3"; claude="$4"; logname="$5"
+worker_should_consider() {
+  # $1 is the transcript tail. Keep this deliberately conservative: skip only
+  # sessions that are dominated by startup/hook metadata or are too small.
+  local body="$1"
+  local bytes
+  bytes=$(printf '%s' "$body" | wc -c | tr -d ' ')
+  [ "${bytes:-0}" -ge 2500 ] || return 1
+
+  if printf '%s' "$body" | grep -q '너는 LLM 위키 큐레이션 보조다'; then
+    return 1
+  fi
+
+  if printf '%s' "$body" | grep -Eq 'tool_use|git diff|git status|error|Error|Exception|bug|fix|수정|버그|장애|원인|해결|결정|근거|runbook|http[s]?://'; then
+    return 0
+  fi
+
+  return 1
+}
+
+run_capture() {
+  local tp="$1" reason="$2" claude="$3" key="$4"
+  local ts body out
+
+  if [ ! -r "$tp" ]; then
+    log "skip unreadable transcript"
+    return 0
+  fi
+
+  body=$(tail -c 120000 "$tp" 2>/dev/null)
+  if ! worker_should_consider "$body"; then
+    : > "$DONE_DIR/$key"
+    log "filtered low-signal transcript (reason=$reason)"
+    return 0
+  fi
+
   ts=$(date "+%Y-%m-%d %H:%M")
   prompt="너는 LLM 위키 큐레이션 보조다. 아래 <transcript> 는 Claude Code 세션 기록(JSONL) 끝부분이다.
 이 세션에 위키에 남길 가치가 있는 내용이 있는가?
@@ -35,22 +70,87 @@ nohup bash -c '
 - 요약: <2~3줄>
 - 분류 제안: notes | concepts | entities | sources 중 택
 - 근거: <왜 위키감인지 한 줄>"
-  # transcript 는 stdin 이 아니라 prompt 에 임베드해야 모델이 본다.
-  # advisorModel=fable 가 이 계정 게이팅이라 헤드리스 요청이 400 → settings 로 덮어씀.
-  body=$(tail -c 120000 "$tp")
+
   out=$("$claude" -p "$prompt
 <transcript>
 $body
 </transcript>" --model haiku --settings "{\"advisorModel\":\"haiku\"}" --output-format text 2>/dev/null)
-  if printf "%s" "$out" | grep -q "^### "; then
+
+  if printf '%s' "$out" | grep -q "^### "; then
     {
       printf "\n---\n<!-- session-capture %s reason=%s -->\n" "$ts" "$reason"
       printf "%s\n" "$out"
-    } >> "$inbox"
-    bash "$HOME/.claude/hooks/hook-log.sh" "$logname" "candidate appended (reason=$reason)"
+    } >> "$INBOX"
+    log "candidate appended (reason=$reason)"
   else
-    bash "$HOME/.claude/hooks/hook-log.sh" "$logname" "no candidate (reason=$reason)"
+    log "no candidate (reason=$reason)"
   fi
-' _ "$tp" "$INBOX" "$reason" "$CLAUDE" "$LOG_NAME" >/dev/null 2>&1 &
+
+  : > "$DONE_DIR/$key"
+}
+
+run_worker() {
+  local claude job tp reason key count
+
+  mkdir -p "$QUEUE_DIR" "$DONE_DIR" || exit 0
+  if ! mkdir "$LOCK_DIR" 2>/dev/null; then
+    exit 0
+  fi
+  trap 'rm -rf "$LOCK_DIR"' EXIT INT TERM
+
+  claude=$(command -v claude)
+  if [ -z "$claude" ] || [ ! -d "$HOME/ryu-mg/wiki/.git" ]; then
+    log "worker skip (claude=${claude:+y} wiki=$([ -d "$HOME/ryu-mg/wiki/.git" ] && printf y))"
+    exit 0
+  fi
+
+  count=0
+  for job in "$QUEUE_DIR"/*.job; do
+    [ -e "$job" ] || break
+    count=$((count + 1))
+    [ "$count" -le "$MAX_QUEUE_ITEMS" ] || break
+
+    IFS="$(printf '\t')" read -r tp reason < "$job"
+    key=$(hash_key "$tp")
+
+    if [ -e "$DONE_DIR/$key" ]; then
+      rm -f "$job"
+      log "duplicate skipped"
+      continue
+    fi
+
+    run_capture "$tp" "${reason:-other}" "$claude" "$key"
+    rm -f "$job"
+  done
+}
+
+enqueue_and_start_worker() {
+  local input tp reason job
+
+  input=$(cat)
+  tp=$(printf '%s' "$input" | jq -r '.transcript_path // empty' 2>/dev/null)
+  reason=$(printf '%s' "$input" | jq -r '.reason // "other"' 2>/dev/null)
+
+  if [ -z "$tp" ] || [ ! -r "$tp" ] || [ ! -d "$HOME/ryu-mg/wiki/.git" ]; then
+    log "skip enqueue (tp=${tp:+y} wiki=$([ -d "$HOME/ryu-mg/wiki/.git" ] && printf y))"
+    exit 0
+  fi
+
+  mkdir -p "$QUEUE_DIR" "$DONE_DIR" || exit 0
+  job="$QUEUE_DIR/$(date +%Y%m%d%H%M%S)-$$-${RANDOM:-0}.job"
+  printf '%s\t%s\n' "$tp" "${reason:-other}" > "$job"
+  log "queued (reason=${reason:-other})"
+
+  nohup "$0" --worker >/dev/null 2>&1 &
+}
+
+case "${1:-}" in
+  --worker)
+    run_worker
+    ;;
+  *)
+    enqueue_and_start_worker
+    ;;
+esac
 
 exit 0
